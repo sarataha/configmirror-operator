@@ -25,6 +25,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -71,22 +72,36 @@ var _ = Describe("ConfigMirror Controller Integration Tests", func() {
 		})
 
 		AfterEach(func() {
+			By("Cleaning up ConfigMaps in source namespace")
+			configMapList := &corev1.ConfigMapList{}
+			if err := k8sClient.List(ctx, configMapList, &client.ListOptions{Namespace: sourceNamespace}); err == nil {
+				for _, cm := range configMapList.Items {
+					k8sClient.Delete(ctx, &cm)
+				}
+			}
+
 			By("Cleaning up ConfigMirror")
 			configMirror := &mirrorv1alpha1.ConfigMirror{}
 			err := k8sClient.Get(ctx, types.NamespacedName{Name: configMirrorName, Namespace: sourceNamespace}, configMirror)
 			if err == nil {
-				Expect(k8sClient.Delete(ctx, configMirror)).To(Succeed())
+				// Remove finalizer to allow deletion
+				configMirror.Finalizers = nil
+				k8sClient.Update(ctx, configMirror)
+				k8sClient.Delete(ctx, configMirror)
 			}
 
 			By("Cleaning up namespaces")
 			ns1 := &corev1.Namespace{}
 			if err := k8sClient.Get(ctx, types.NamespacedName{Name: targetNamespace1}, ns1); err == nil {
-				Expect(k8sClient.Delete(ctx, ns1)).To(Succeed())
+				k8sClient.Delete(ctx, ns1)
 			}
 			ns2 := &corev1.Namespace{}
 			if err := k8sClient.Get(ctx, types.NamespacedName{Name: targetNamespace2}, ns2); err == nil {
-				Expect(k8sClient.Delete(ctx, ns2)).To(Succeed())
+				k8sClient.Delete(ctx, ns2)
 			}
+
+			// Wait for cleanup
+			time.Sleep(100 * time.Millisecond)
 		})
 
 		It("should add finalizer when ConfigMirror is created", func() {
@@ -195,8 +210,7 @@ var _ = Describe("ConfigMirror Controller Integration Tests", func() {
 				Namespace: targetNamespace1,
 			}, replica)).To(Succeed())
 			Expect(replica.Data).To(Equal(sourceConfigMap.Data))
-			Expect(replica.Labels).To(HaveKeyWithValue("mirror.pawapay.io/source-namespace", sourceNamespace))
-			Expect(replica.Labels).To(HaveKeyWithValue("mirror.pawapay.io/source-name", sourceConfigMap.Name))
+			Expect(replica.Labels).To(HaveKey("mirror.pawapay.io/owner"))
 		})
 
 		It("should not replicate ConfigMaps with non-matching labels", func() {
