@@ -1,0 +1,16 @@
+apiVersion: v2
+name: configmirror-operator
+description: A Kubernetes operator for replicating ConfigMaps across namespaces with PostgreSQL persistence
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - operator
+  - configmap
+  - postgresql
+  - replication
+maintainers:
+  - name: sarataha
+home: https://github.com/sarataha/configmirror-operator
+sources:
+  - https://github.com/sarataha/configmirror-operator

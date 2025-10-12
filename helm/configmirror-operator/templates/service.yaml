@@ -1,0 +1,17 @@
+{{- if .Values.metricsService.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "configmirror-operator.fullname" . }}-metrics
+  labels:
+    {{- include "configmirror-operator.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+  - name: metrics
+    port: {{ .Values.metricsService.port }}
+    targetPort: metrics
+    protocol: TCP
+  selector:
+    {{- include "configmirror-operator.selectorLabels" . | nindent 4 }}
+{{- end }}

@@ -1,0 +1,18 @@
+apiVersion: mirror.pawapay.io/v1alpha1
+kind: ConfigMirror
+metadata:
+  name: configmirror-sample
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: sample-app
+      replicate: "true"
+  targetNamespaces:
+    - dev
+    - staging
+  database:
+    enabled: true
+    secretRef:
+      name: rds-credentials
+      namespace: default
