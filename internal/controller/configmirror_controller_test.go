@@ -40,12 +40,12 @@ var _ = Describe("ConfigMirror Controller Integration Tests", func() {
 
 	Context("When creating a ConfigMirror resource", func() {
 		var (
-			ctx               context.Context
-			configMirrorName  string
-			sourceNamespace   string
-			targetNamespace1  string
-			targetNamespace2  string
-			reconciler        *ConfigMirrorReconciler
+			ctx              context.Context
+			configMirrorName string
+			sourceNamespace  string
+			targetNamespace1 string
+			targetNamespace2 string
+			reconciler       *ConfigMirrorReconciler
 		)
 
 		BeforeEach(func() {
@@ -135,8 +135,8 @@ var _ = Describe("ConfigMirror Controller Integration Tests", func() {
 					Name:      "test-cm-" + randString(5),
 					Namespace: sourceNamespace,
 					Labels: map[string]string{
-						"app":  "test",
-						"env":  "dev",
+						"app": "test",
+						"env": "dev",
 					},
 				},
 				Data: map[string]string{
