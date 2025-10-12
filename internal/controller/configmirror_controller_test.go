@@ -467,7 +467,7 @@ var _ = Describe("ConfigMirror Controller Integration Tests", func() {
 			}, updated)).To(Succeed())
 			Expect(updated.Status.ReplicatedConfigMaps[0].Name).To(Equal(sourceConfigMap.Name))
 			Expect(updated.Status.ReplicatedConfigMaps[0].SourceNamespace).To(Equal(sourceNamespace))
-			Expect(updated.Status.ReplicatedConfigMaps[0].TargetNamespaces).To(ConsistOf(targetNamespace1))
+			Expect(updated.Status.ReplicatedConfigMaps[0].Targets).To(ConsistOf(targetNamespace1))
 		})
 
 		It("should handle invalid label selector gracefully", func() {
