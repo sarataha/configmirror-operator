@@ -12,7 +12,7 @@ on:
 env:
   GO_VERSION: '1.25.0'
   AWS_REGION: us-east-1
-  ECR_REPOSITORY: pawapay-ecr
+  ECR_REPOSITORY: configmirror-operator
 
 permissions:
   id-token: write
