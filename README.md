@@ -1,14 +1,15 @@
 # ConfigMirror Operator
 
-A production-grade Kubernetes operator that replicates ConfigMaps across namespaces with PostgreSQL persistence.
+A Kubernetes operator that replicates ConfigMaps across namespaces with PostgreSQL persistence.
 
 ## Features
 
 - **ConfigMap Replication**: Automatically replicates ConfigMaps from a source namespace to multiple target namespaces based on label selectors
+- **Orphan Cleanup**: Automatically removes replicated ConfigMaps when source is deleted
 - **PostgreSQL Persistence**: Stores ConfigMap data in RDS PostgreSQL for audit trails and recovery
 - **IRSA Integration**: Uses IAM Roles for Service Accounts for secure AWS access
 - **High Availability**: Supports leader election for multi-replica deployments
-- **Production Ready**: Comprehensive RBAC, security contexts, health checks, and metrics
+- **Security**: Non-root containers, read-only filesystem, dropped capabilities
 
 ## Architecture
 
@@ -160,16 +161,19 @@ make docker-push IMG=<registry>/<image>:<tag>
 
 The operator uses GitHub Actions for CI/CD:
 
-- **On PR**: Runs tests, linting, and builds
-- **On main push**: Builds and pushes to ECR using OIDC
-- **On tag**: Creates versioned release
+- **On PR**: Runs tests, linting, Helm validation, and builds
+- **On main push**: Builds multi-platform Docker images and pushes to ECR using OIDC
+- **On tag**: Creates versioned releases
+- **E2E Tests**: Runs in Kind cluster on every push
 
 Required GitHub secrets:
-- `AWS_ACCOUNT_ID`: Your AWS account ID
+- `AWS_ROLE_ARN`: Full ARN of the IAM role (e.g., `arn:aws:iam::ACCOUNT_ID:role/github-actions-ecr-push`)
 
 Required AWS resources:
-- IAM OIDC provider for GitHub Actions
-- IAM role `github-actions-ecr-push` with ECR push permissions
+- IAM OIDC provider for GitHub Actions (`token.actions.githubusercontent.com`)
+- IAM role `github-actions-ecr-push` with:
+  - Trust policy allowing GitHub OIDC
+  - ECR push permissions to the repository
 
 ## Monitoring
 

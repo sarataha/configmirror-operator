@@ -264,16 +264,131 @@ var _ = Describe("Manager", Ordered, func() {
 		})
 
 		// +kubebuilder:scaffold:e2e-webhooks-checks
+	})
 
-		// TODO: Customize the e2e test suite with scenarios specific to your project.
-		// Consider applying sample/CR(s) and check their status and/or verifying
-		// the reconciliation by using the metrics, i.e.:
-		// metricsOutput, err := getMetricsOutput()
-		// Expect(err).NotTo(HaveOccurred(), "Failed to retrieve logs from curl pod")
-		// Expect(metricsOutput).To(ContainSubstring(
-		//    fmt.Sprintf(`controller_runtime_reconcile_total{controller="%s",result="success"} 1`,
-		//    strings.ToLower(<Kind>),
-		// ))
+	Context("ConfigMirror Functionality", func() {
+		It("should replicate ConfigMaps to target namespaces", func() {
+			By("creating target namespaces")
+			cmd := exec.Command("kubectl", "create", "namespace", "target-ns-1")
+			_, _ = utils.Run(cmd)
+			cmd = exec.Command("kubectl", "create", "namespace", "target-ns-2")
+			_, _ = utils.Run(cmd)
+
+			By("creating a source ConfigMap with labels")
+			configMapYAML := `
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-config
+  namespace: ` + namespace + `
+  labels:
+    app: test
+    replicate: "true"
+data:
+  config.yaml: "test: value"
+`
+			cmd = exec.Command("kubectl", "apply", "-f", "-")
+			cmd.Stdin = bytes.NewBufferString(configMapYAML)
+			_, err := utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("creating a ConfigMirror resource")
+			configMirrorYAML := `
+apiVersion: mirror.pawapay.io/v1alpha1
+kind: ConfigMirror
+metadata:
+  name: test-mirror
+  namespace: ` + namespace + `
+spec:
+  selector:
+    matchLabels:
+      app: test
+      replicate: "true"
+  targetNamespaces:
+    - target-ns-1
+    - target-ns-2
+`
+			cmd = exec.Command("kubectl", "apply", "-f", "-")
+			cmd.Stdin = bytes.NewBufferString(configMirrorYAML)
+			_, err = utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("waiting for ConfigMap to be replicated to target-ns-1")
+			Eventually(func() error {
+				cmd := exec.Command("kubectl", "get", "configmap", "test-config", "-n", "target-ns-1")
+				_, err := utils.Run(cmd)
+				return err
+			}, 2*time.Minute, 5*time.Second).Should(Succeed())
+
+			By("waiting for ConfigMap to be replicated to target-ns-2")
+			Eventually(func() error {
+				cmd := exec.Command("kubectl", "get", "configmap", "test-config", "-n", "target-ns-2")
+				_, err := utils.Run(cmd)
+				return err
+			}, 2*time.Minute, 5*time.Second).Should(Succeed())
+
+			By("verifying replicated ConfigMap data matches source")
+			cmd = exec.Command("kubectl", "get", "configmap", "test-config", "-n", "target-ns-1", "-o", "jsonpath={.data}")
+			output, err := utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(output).To(ContainSubstring("test: value"))
+
+			By("verifying ConfigMirror status is updated")
+			Eventually(func() string {
+				cmd := exec.Command("kubectl", "get", "configmirror", "test-mirror", "-n", namespace, "-o", "jsonpath={.status.conditions[?(@.type=='Ready')].status}")
+				output, _ := utils.Run(cmd)
+				return output
+			}, 2*time.Minute, 5*time.Second).Should(Equal("True"))
+		})
+
+		It("should handle ConfigMap updates", func() {
+			By("updating source ConfigMap")
+			updateYAML := `
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-config
+  namespace: ` + namespace + `
+  labels:
+    app: test
+    replicate: "true"
+data:
+  config.yaml: "test: updated-value"
+`
+			cmd := exec.Command("kubectl", "apply", "-f", "-")
+			cmd.Stdin = bytes.NewBufferString(updateYAML)
+			_, err := utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("verifying replicated ConfigMap is updated")
+			Eventually(func() string {
+				cmd := exec.Command("kubectl", "get", "configmap", "test-config", "-n", "target-ns-1", "-o", "jsonpath={.data.config\\.yaml}")
+				output, _ := utils.Run(cmd)
+				return output
+			}, 2*time.Minute, 5*time.Second).Should(Equal("test: updated-value"))
+		})
+
+		It("should clean up replicated ConfigMaps when source is deleted", func() {
+			By("deleting source ConfigMap")
+			cmd := exec.Command("kubectl", "delete", "configmap", "test-config", "-n", namespace)
+			_, err := utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("verifying replicated ConfigMaps are removed (orphan cleanup)")
+			Eventually(func() error {
+				cmd := exec.Command("kubectl", "get", "configmap", "test-config", "-n", "target-ns-1")
+				_, err := utils.Run(cmd)
+				return err
+			}, 2*time.Minute, 5*time.Second).Should(HaveOccurred())
+
+			By("cleaning up")
+			cmd = exec.Command("kubectl", "delete", "configmirror", "test-mirror", "-n", namespace)
+			_, _ = utils.Run(cmd)
+			cmd = exec.Command("kubectl", "delete", "namespace", "target-ns-1")
+			_, _ = utils.Run(cmd)
+			cmd = exec.Command("kubectl", "delete", "namespace", "target-ns-2")
+			_, _ = utils.Run(cmd)
+		})
 	})
 })
 
