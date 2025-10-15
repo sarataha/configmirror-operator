@@ -20,9 +20,42 @@ permissions:
   pull-requests: write
 
 jobs:
+  changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+      docs: ${{ steps.filter.outputs.docs }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Check file changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            code:
+              - '**/*.go'
+              - 'Dockerfile'
+              - 'go.mod'
+              - 'go.sum'
+              - 'config/**'
+              - 'api/**'
+              - 'internal/**'
+              - 'cmd/**'
+              - 'helm/**'
+              - 'Makefile'
+              - '.github/workflows/**'
+            docs:
+              - '**.md'
+              - 'docs/**'
+
   test:
     name: Test and Lint
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -59,7 +92,8 @@ jobs:
   e2e:
     name: E2E Tests
     runs-on: ubuntu-latest
-    needs: test
+    needs: [changes, test]
+    if: needs.changes.outputs.code == 'true'
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -83,46 +117,26 @@ jobs:
   build-push:
     name: Build and Push to ECR
     runs-on: ubuntu-latest
-    needs: [test, e2e]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [changes, test, e2e]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.changes.outputs.code == 'true'
     steps:
-      - name: Check for code changes
-        uses: dorny/paths-filter@v3
-        id: changes
-        with:
-          filters: |
-            code:
-              - '**/*.go'
-              - 'Dockerfile'
-              - 'go.mod'
-              - 'go.sum'
-              - 'config/**'
-              - 'api/**'
-              - 'internal/**'
-              - 'cmd/**'
-              - 'helm/**'
       - name: Checkout code
-        if: steps.changes.outputs.code == 'true'
         uses: actions/checkout@v5
 
       - name: Set up Docker Buildx
-        if: steps.changes.outputs.code == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Configure AWS credentials
-        if: steps.changes.outputs.code == 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
-        if: steps.changes.outputs.code == 'true'
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Extract metadata
-        if: steps.changes.outputs.code == 'true'
         id: meta
         run: |
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
@@ -134,7 +148,6 @@ jobs:
           echo "date=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
 
       - name: Build and push Docker image
-        if: steps.changes.outputs.code == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -152,12 +165,13 @@ jobs:
             org.opencontainers.image.version=${{ steps.meta.outputs.version }}
 
       - name: Image digest
-        if: steps.changes.outputs.code == 'true'
         run: echo "Image pushed with tags ${{ steps.meta.outputs.version }} and latest"
 
   helm-lint:
     name: Helm Lint
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -176,3 +190,29 @@ jobs:
           helm template configmirror-operator helm/configmirror-operator \
             --set image.repository=test \
             --set image.tag=test
+
+  # Gate job for branch protection - always runs
+  ci-success:
+    name: CI Success
+    runs-on: ubuntu-latest
+    needs: [changes, test, e2e, helm-lint]
+    if: always()
+    steps:
+      - name: Check job results
+        run: |
+          # If only docs changed, auto-pass
+          if [[ "${{ needs.changes.outputs.code }}" != "true" ]]; then
+            echo "Only documentation changed - CI passed"
+            exit 0
+          fi
+          
+          # If code changed, all jobs must pass
+          if [[ "${{ needs.test.result }}" != "success" ]] || \
+             [[ "${{ needs.e2e.result }}" != "success" ]] || \
+             [[ "${{ needs.helm-lint.result }}" != "success" ]]; then
+            echo "One or more required jobs failed"
+            exit 1
+          fi
+          
+          echo "All required checks passed"
+          exit 0
