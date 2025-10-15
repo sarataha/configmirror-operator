@@ -218,15 +218,16 @@ Required AWS resources:
 
 The operator exposes Prometheus metrics on port 8080:
 
-- `controller_runtime_reconcile_total`: Total reconciliations
-- `controller_runtime_reconcile_errors_total`: Failed reconciliations
-- `controller_runtime_reconcile_time_seconds`: Reconciliation duration
+- `rest_client_requests_total`: Kubernetes API client requests by status code, method, and host
+- `leader_election_master_status`: Leader election status (1 = leader, 0 = follower)
+- Process metrics: CPU, memory, file descriptors, etc.
+- Go runtime metrics: GC stats, goroutines, memory allocations
 
 #### Accessing Metrics
 
 ```bash
-# Port-forward to access metrics locally
-kubectl port-forward -n configmirror-system svc/configmirror-operator-metrics 8080:8080
+# Port-forward to access metrics
+kubectl port-forward -n configmirror-system deployment/configmirror-operator 8080:8080
 curl http://localhost:8080/metrics
 ```
 
