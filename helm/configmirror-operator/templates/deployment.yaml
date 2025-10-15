@@ -51,7 +51,7 @@ spec:
           valueFrom:
             secretKeyRef:
               name: {{ .Values.database.secretName }}
-              key: database
+              key: dbname
         - name: DB_USER
           valueFrom:
             secretKeyRef:

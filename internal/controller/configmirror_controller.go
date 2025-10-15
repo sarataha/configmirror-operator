@@ -1,19 +1,3 @@
-/*
-Copyright 2025.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package controller
 
 import (
@@ -101,7 +85,7 @@ func (r *ConfigMirrorReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	configMapList := &corev1.ConfigMapList{}
 	if err := r.List(ctx, configMapList,
-		client.InNamespace(configMirror.Namespace),
+		client.InNamespace(configMirror.Spec.SourceNamespace),
 		client.MatchingLabelsSelector{Selector: selector},
 	); err != nil {
 		logger.Error(err, "Failed to list ConfigMaps")
@@ -289,13 +273,19 @@ func (r *ConfigMirrorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *ConfigMirrorReconciler) findConfigMirrorsForConfigMap(ctx context.Context, cm client.Object) []reconcile.Request {
 	configMapObj := cm.(*corev1.ConfigMap)
 
+	// List all ConfigMirrors across all namespaces
 	configMirrorList := &mirrorv1alpha1.ConfigMirrorList{}
-	if err := r.List(ctx, configMirrorList, client.InNamespace(configMapObj.Namespace)); err != nil {
+	if err := r.List(ctx, configMirrorList); err != nil {
 		return nil
 	}
 
 	var requests []reconcile.Request
 	for _, configMirror := range configMirrorList.Items {
+		// Check if this ConfigMirror is watching the ConfigMap's namespace
+		if configMirror.Spec.SourceNamespace != configMapObj.Namespace {
+			continue
+		}
+
 		selector, err := metav1.LabelSelectorAsSelector(configMirror.Spec.Selector)
 		if err != nil {
 			continue

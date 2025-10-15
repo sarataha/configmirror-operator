@@ -14,8 +14,9 @@ A Kubernetes operator that replicates ConfigMaps across namespaces with PostgreS
 ## Architecture
 
 ```
-ConfigMirror CR (source-ns)
-├── Watches ConfigMaps with matching labels
+ConfigMirror CR (ops namespace)
+├── Watches ConfigMaps in sourceNamespace
+├── Filters by label selector
 ├── Replicates to target namespaces
 │   ├── namespace-a
 │   ├── namespace-b
@@ -25,36 +26,75 @@ ConfigMirror CR (source-ns)
 
 ## Prerequisites
 
-- Kubernetes 1.34+ (EKS)
-- PostgreSQL 17+ (RDS)
+### Infrastructure Requirements
+
+This operator requires AWS infrastructure to be deployed first. The infrastructure includes:
+- EKS cluster (Kubernetes 1.34)
+- RDS PostgreSQL 17.6 database
+- ECR repository for operator images
+- VPC with Multi-AZ setup
+- IAM roles and OIDC provider
+
+**Deploy infrastructure first using:** https://github.com/sarataha/pawapay-infra
+
+### Local Development Requirements
+
+- kubectl 1.34+
 - Helm 3.16+
-- AWS IAM role with RDS access (for IRSA)
+- AWS CLI 2.0+
 - Go 1.25.0+ (for development)
 - Kubebuilder 4.9.0+ (for development)
 
 ## Installation
 
-### 1. Create Database Secret
+### 1. Configure kubectl
 
 ```bash
-kubectl create secret generic rds-credentials \
-  --from-literal=host=your-rds-endpoint.rds.amazonaws.com \
-  --from-literal=port=5432 \
-  --from-literal=database=configmirror \
-  --from-literal=username=your-username \
-  --from-literal=password=your-password \
-  -n configmirror-system
+# Connect to the EKS cluster created by pawapay-infra
+aws eks update-kubeconfig --name pawapay-eks-dev --region us-east-1
+kubectl get nodes
 ```
 
-### 2. Install with Helm
+### 2. Create Kubernetes Secret from AWS Secrets Manager
+
+The infrastructure stores RDS credentials in AWS Secrets Manager. Create a Kubernetes secret from it:
 
 ```bash
+# Create namespace
+kubectl create namespace configmirror-system
+
+# Sync credentials from AWS Secrets Manager to Kubernetes
+aws secretsmanager get-secret-value \
+  --secret-id pawapay-rds-master-password \
+  --region us-east-1 \
+  --query SecretString \
+  --output text | jq -r '. | to_entries | map("--from-literal=\(.key)=\(.value|tostring)") | join(" ")' | \
+  xargs kubectl create secret generic rds-credentials -n configmirror-system
+
+# Verify
+kubectl describe secret rds-credentials -n configmirror-system
+```
+
+> **Note:** Due to time constraints this uses a manual sync command. In a production environment I would use [External Secrets Operator](https://external-secrets.io/) to automatically sync secrets from AWS Secrets Manager to Kubernetes eliminating manual steps and keeping secrets updated automatically.
+
+### 3. Install with Helm
+
+```bash
+# Get ECR repository URL
+export ECR_URL=$(aws ecr describe-repositories \
+  --repository-names configmirror-operator \
+  --query 'repositories[0].repositoryUri' \
+  --output text)
+
+# Install operator
 helm install configmirror-operator ./helm/configmirror-operator \
   --namespace configmirror-system \
-  --create-namespace \
-  --set image.repository=<your-ecr-repo> \
-  --set image.tag=latest \
-  --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=arn:aws:iam::ACCOUNT_ID:role/configmirror-operator
+  --set image.repository=$ECR_URL \
+  --set image.tag=latest
+
+# Verify deployment
+kubectl get pods -n configmirror-system
+kubectl logs -n configmirror-system -l app.kubernetes.io/name=configmirror-operator
 ```
 
 ## Usage
@@ -66,16 +106,17 @@ apiVersion: mirror.pawapay.io/v1alpha1
 kind: ConfigMirror
 metadata:
   name: app-config-mirror
-  namespace: source-namespace
+  namespace: ops
 spec:
-  selector:
-    matchLabels:
-      app: myapp
-      replicate: "true"
+  sourceNamespace: app-source
   targetNamespaces:
     - dev
     - staging
     - prod
+  selector:
+    matchLabels:
+      app: myapp
+      replicate: "true"
   database:
     enabled: true
     secretRef:
@@ -90,7 +131,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: app-config
-  namespace: source-namespace
+  namespace: app-source
   labels:
     app: myapp
     replicate: "true"
@@ -100,7 +141,7 @@ data:
 ```
 
 The operator will automatically:
-1. Detect the ConfigMap matches the selector
+1. Detect the ConfigMap in `app-source` namespace matches the selector
 2. Replicate it to dev, staging, and prod namespaces
 3. Save it to PostgreSQL database
 4. Update the ConfigMirror status
@@ -108,8 +149,8 @@ The operator will automatically:
 ### Check Status
 
 ```bash
-kubectl get configmirrors -n source-namespace
-kubectl describe configmirror app-config-mirror -n source-namespace
+kubectl get configmirrors -n ops
+kubectl describe configmirror app-config-mirror -n ops
 ```
 
 ## Database Schema
@@ -132,37 +173,12 @@ CREATE TABLE configmaps (
 );
 ```
 
-## Development
-
-### Build and Run Locally
-
-```bash
-# Install CRDs
-make install
-
-# Run locally (connects to kubeconfig cluster)
-make run
-
-# Run tests
-make test
-
-# Build binary
-make build
-```
-
-### Build Docker Image
-
-```bash
-make docker-build IMG=<registry>/<image>:<tag>
-make docker-push IMG=<registry>/<image>:<tag>
-```
-
 ## CI/CD
 
 The operator uses GitHub Actions for CI/CD:
 
 - **On PR**: Runs tests, linting, Helm validation, and builds
-- **On main push**: Builds multi-platform Docker images and pushes to ECR using OIDC
+- **On main push**: Builds Docker image and pushes to ECR using OIDC
 - **On tag**: Creates versioned releases
 - **E2E Tests**: Runs in Kind cluster on every push
 
@@ -199,6 +215,14 @@ The operator exposes Prometheus metrics on port 8080:
 - NetworkPolicies supported
 - Pod Security Standards compliant
 
+## Design Decisions & Trade-offs
+
+- I'm assuming the AWS infra is already deployed via `pawapay-infra` before installing the operator. This keeps the deployment clean and separated.
+- For this demo I'm manually syncing RDS credentials from AWS Secrets Manager to Kubernetes. In production I'd use External Secrets Operator to automate this, but given time constraints the manual approach works fine.
+- The operator gracefully handles missing database credentials and continues working (just without persistence). This makes testing easier.
+- Building only for linux/amd64 instead of multi-platform to keep CI faster. ARM64 can be added later if needed.
+- The operator needs to watch ConfigMaps across multiple namespaces based on the `sourceNamespace` field, so it requires broader RBAC permissions than a namespace-scoped operator.
+
 ## License
 
 Copyright 2025.
@@ -214,4 +238,3 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-

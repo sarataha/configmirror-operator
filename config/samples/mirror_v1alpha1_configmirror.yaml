@@ -4,13 +4,14 @@ metadata:
   name: configmirror-sample
   namespace: default
 spec:
+  sourceNamespace: default
+  targetNamespaces:
+    - dev
+    - staging
   selector:
     matchLabels:
       app: sample-app
       replicate: "true"
-  targetNamespaces:
-    - dev
-    - staging
   database:
     enabled: true
     secretRef:

@@ -25,14 +25,18 @@ import (
 
 // ConfigMirrorSpec defines the desired state of ConfigMirror
 type ConfigMirrorSpec struct {
-	// Selector is a label selector for ConfigMaps to mirror
+	// SourceNamespace is the namespace to watch for ConfigMaps
 	// +kubebuilder:validation:Required
-	Selector *metav1.LabelSelector `json:"selector"`
+	SourceNamespace string `json:"sourceNamespace"`
 
 	// TargetNamespaces is a list of namespaces to replicate ConfigMaps to
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinItems=1
 	TargetNamespaces []string `json:"targetNamespaces"`
+
+	// Selector is a label selector for ConfigMaps to mirror
+	// +kubebuilder:validation:Required
+	Selector *metav1.LabelSelector `json:"selector"`
 
 	// Database configuration for storing ConfigMap data
 	// +optional
@@ -46,7 +50,7 @@ type DatabaseConfig struct {
 	Enabled bool `json:"enabled"`
 
 	// SecretRef references a Secret containing database connection details
-	// Expected keys: host, port, database, username, password
+	// Expected keys: host, port, dbname, username, password
 	// +kubebuilder:validation:Required
 	SecretRef SecretReference `json:"secretRef"`
 }

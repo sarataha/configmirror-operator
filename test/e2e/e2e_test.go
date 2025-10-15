@@ -301,13 +301,14 @@ metadata:
   name: test-mirror
   namespace: ` + namespace + `
 spec:
+  sourceNamespace: ` + namespace + `
+  targetNamespaces:
+    - target-ns-1
+    - target-ns-2
   selector:
     matchLabels:
       app: test
       replicate: "true"
-  targetNamespaces:
-    - target-ns-1
-    - target-ns-2
 `
 			cmd = exec.Command("kubectl", "apply", "-f", "-")
 			cmd.Stdin = bytes.NewBufferString(configMirrorYAML)
