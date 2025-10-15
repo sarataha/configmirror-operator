@@ -4,12 +4,11 @@ A Kubernetes operator that replicates ConfigMaps across namespaces with PostgreS
 
 ## Features
 
-- **ConfigMap Replication**: Automatically replicates ConfigMaps from a source namespace to multiple target namespaces based on label selectors
-- **Orphan Cleanup**: Automatically removes replicated ConfigMaps when source is deleted
-- **PostgreSQL Persistence**: Stores ConfigMap data in RDS PostgreSQL for audit trails and recovery
-- **IRSA Integration**: Uses IAM Roles for Service Accounts for secure AWS access
-- **High Availability**: Supports leader election for multi-replica deployments
-- **Security**: Non-root containers, read-only filesystem, dropped capabilities
+- Replicates ConfigMaps from source namespace to target namespaces based on label selectors
+- Removes replicated ConfigMaps when source is deleted
+- Stores ConfigMap data in RDS PostgreSQL
+- Supports leader election for multi-replica deployments
+- Non-root containers, read-only filesystem, dropped capabilities
 
 ## Architecture
 
@@ -28,7 +27,7 @@ ConfigMirror CR (ops namespace)
 
 ### Infrastructure Requirements
 
-This operator requires AWS infrastructure to be deployed first. The infrastructure includes:
+This operator requires AWS infrastructure to be deployed first:
 - EKS cluster (Kubernetes 1.34)
 - RDS PostgreSQL 17.6 database
 - ECR repository for operator images
@@ -57,7 +56,7 @@ kubectl get nodes
 
 ### 2. Create Kubernetes Secret from AWS Secrets Manager
 
-The infrastructure stores RDS credentials in AWS Secrets Manager. Create a Kubernetes secret from it:
+RDS credentials are stored in AWS Secrets Manager. Create a Kubernetes secret from it:
 
 ```bash
 # Create namespace
@@ -146,12 +145,36 @@ The operator will automatically:
 3. Save it to PostgreSQL database
 4. Update the ConfigMirror status
 
+### ConfigMap Update Behavior
+
+The operator automatically handles updates to source ConfigMaps:
+
+- When a source ConfigMap is modified, it auto-updates all replicas in target namespaces
+- Changes to `data` and `binaryData` fields are immediately propagated
+- Replicated ConfigMaps have ownership labels to prevent conflicts
+- When a source ConfigMap is deleted, all replicated copies are automatically removed
+
+### Finalizer Behavior
+
+The operator uses finalizers for clean resource cleanup:
+
+- A finalizer (`mirror.pawapay.io/finalizer`) is automatically added when ConfigMirror is created
+- When ConfigMirror is deleted, the operator:
+  1. Removes all replicated ConfigMaps from target namespaces
+  2. Deletes database records (if enabled)
+  3. Removes the finalizer to complete deletion
+- This prevents orphaned ConfigMaps when ConfigMirror is deleted
+
 ### Check Status
 
 ```bash
 kubectl get configmirrors -n ops
 kubectl describe configmirror app-config-mirror -n ops
 ```
+
+## Testing
+
+See [docs/TESTING.md](docs/TESTING.md) for testing guide.
 
 ## Database Schema
 
@@ -177,19 +200,17 @@ CREATE TABLE configmaps (
 
 The operator uses GitHub Actions for CI/CD:
 
-- **On PR**: Runs tests, linting, Helm validation, and builds
-- **On main push**: Builds Docker image and pushes to ECR using OIDC
-- **On tag**: Creates versioned releases
-- **E2E Tests**: Runs in Kind cluster on every push
+- On PR: Runs tests, linting, Helm validation, and builds
+- On main push: Builds Docker image and pushes to ECR using OIDC
+- On tag: Creates versioned releases
+- E2E Tests: Runs in Kind cluster on every push
 
 Required GitHub secrets:
 - `AWS_ROLE_ARN`: Full ARN of the IAM role (e.g., `arn:aws:iam::ACCOUNT_ID:role/github-actions-ecr-push`)
 
 Required AWS resources:
 - IAM OIDC provider for GitHub Actions (`token.actions.githubusercontent.com`)
-- IAM role `github-actions-ecr-push` with:
-  - Trust policy allowing GitHub OIDC
-  - ECR push permissions to the repository
+- IAM role `github-actions-ecr-push` with trust policy and ECR push permissions
 
 ## Monitoring
 
@@ -201,6 +222,14 @@ The operator exposes Prometheus metrics on port 8080:
 - `controller_runtime_reconcile_errors_total`: Failed reconciliations
 - `controller_runtime_reconcile_time_seconds`: Reconciliation duration
 
+#### Accessing Metrics
+
+```bash
+# Port-forward to access metrics locally
+kubectl port-forward -n configmirror-system svc/configmirror-operator-metrics 8080:8080
+curl http://localhost:8080/metrics
+```
+
 ### Health Checks
 
 - Liveness: `http://:8081/healthz`
@@ -211,17 +240,18 @@ The operator exposes Prometheus metrics on port 8080:
 - Non-root container with distroless base image
 - Read-only root filesystem
 - Dropped all capabilities
-- IRSA for AWS credentials (no hardcoded secrets)
+- Database credentials stored in Kubernetes secrets
 - NetworkPolicies supported
 - Pod Security Standards compliant
 
-## Design Decisions & Trade-offs
+## Design Decisions
 
-- I'm assuming the AWS infra is already deployed via `pawapay-infra` before installing the operator. This keeps the deployment clean and separated.
-- For this demo I'm manually syncing RDS credentials from AWS Secrets Manager to Kubernetes. In production I'd use External Secrets Operator to automate this, but given time constraints the manual approach works fine.
-- The operator gracefully handles missing database credentials and continues working (just without persistence). This makes testing easier.
-- Building only for linux/amd64 instead of multi-platform to keep CI faster. ARM64 can be added later if needed.
-- The operator needs to watch ConfigMaps across multiple namespaces based on the `sourceNamespace` field, so it requires broader RBAC permissions than a namespace-scoped operator.
+- AWS infra is deployed via `pawapay-infra` before installing the operator
+- Manual sync of RDS credentials from AWS Secrets Manager to Kubernetes (production would use External Secrets Operator)
+- RDS uses password-based authentication (production would use IAM database authentication with IRSA)
+- Operator handles missing database credentials gracefully and continues working without persistence
+- Building only for linux/amd64 to keep CI faster
+- Operator requires broader RBAC permissions to watch ConfigMaps across multiple namespaces
 
 ## License
 
