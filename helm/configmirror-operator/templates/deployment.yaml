@@ -35,6 +35,7 @@ spec:
         - /manager
         args:
         - --leader-elect
+        - --metrics-bind-address=:8080
         - --metrics-secure=false
         {{- if .Values.database.enabled }}
         env:
