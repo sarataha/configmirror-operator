@@ -244,14 +244,21 @@ curl http://localhost:8080/metrics
 - NetworkPolicies supported
 - Pod Security Standards compliant
 
-## Design Decisions
+## Design Decisions & Assumptions
 
-- AWS infra is deployed via `pawapay-infra` before installing the operator
-- Manual sync of RDS credentials from AWS Secrets Manager to Kubernetes (production would use External Secrets Operator)
-- RDS uses password-based authentication (production would use IAM database authentication with IRSA)
-- Operator handles missing database credentials gracefully and continues working without persistence
-- Building only for linux/amd64 to keep CI faster
-- Operator requires broader RBAC permissions to watch ConfigMaps across multiple namespaces
+### Assumptions Made
+- AWS infrastructure (EKS, RDS, ECR) is deployed via `pawapay-infra` before installing the operator
+- All resources deployed in us-east-1 region
+- Operator works with or without database connection
+- ConfigMaps selected using standard Kubernetes label selectors
+- Operator requires cluster-wide permissions to watch multiple namespaces
+- Demo uses manual secret sync, production would automate this
+
+### Design Decisions
+- Manual AWS Secrets Manager sync due to time constraints (production would use External Secrets Operator)
+- Password-based database auth for simplicity (production would use IAM database authentication with IRSA)
+- Only linux/amd64 build to speed up CI (ARM64 can be added later)
+- Operator continues working without database connection for easier testing
 
 ## License
 

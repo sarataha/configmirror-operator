@@ -133,21 +133,6 @@ jobs:
       - name: Image digest
         run: echo "Image pushed with tags ${{ steps.meta.outputs.version }} and latest"
 
-      - name: Update Helm deployment
-        run: |
-          # Get EKS cluster info
-          aws eks update-kubeconfig --name pawapay-eks-dev --region us-east-1
-          
-          # Upgrade the deployment
-          helm upgrade configmirror-operator helm/configmirror-operator \
-            --namespace configmirror-system \
-            --set image.repository=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }} \
-            --set image.tag=${{ steps.meta.outputs.version }} \
-            --wait --timeout=5m
-          
-          # Verify deployment
-          kubectl rollout status deployment/configmirror-operator -n configmirror-system --timeout=5m
-
   helm-lint:
     name: Helm Lint
     runs-on: ubuntu-latest
