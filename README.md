@@ -4,11 +4,11 @@ A Kubernetes operator that replicates ConfigMaps across namespaces with PostgreS
 
 ## Features
 
-- Replicates ConfigMaps from source namespace to target namespaces based on label selectors
-- Removes replicated ConfigMaps when source is deleted
-- Stores ConfigMap data in RDS PostgreSQL
-- Supports leader election for multi-replica deployments
-- Non-root containers, read-only filesystem, dropped capabilities
+- Replicates ConfigMaps across namespaces using label selectors
+- Auto-cleanup when source ConfigMap is deleted
+- Persist ConfigMap data to PostgreSQL
+- Leader election for HA deployments
+- Runs as non-root with minimal privileges
 
 ## Architecture
 
@@ -34,7 +34,7 @@ This operator requires AWS infrastructure to be deployed first:
 - VPC with Multi-AZ setup
 - IAM roles and OIDC provider
 
-**Deploy infrastructure first using:** https://github.com/sarataha/pawapay-infra
+**Deploy infrastructure first using:** https://github.com/sarataha/infra
 
 ### Local Development Requirements
 
@@ -49,7 +49,7 @@ This operator requires AWS infrastructure to be deployed first:
 ### 1. Configure kubectl
 
 ```bash
-# Connect to the EKS cluster created by pawapay-infra
+# Connect to the EKS cluster created by infra repo
 aws eks update-kubeconfig --name pawapay-eks-dev --region us-east-1
 kubectl get nodes
 ```
@@ -248,7 +248,7 @@ curl http://localhost:8080/metrics
 ## Design Decisions & Assumptions
 
 ### Assumptions Made
-- AWS infrastructure (EKS, RDS, ECR) is deployed via `pawapay-infra` before installing the operator
+- AWS infrastructure (EKS, RDS, ECR) is deployed via `infra` repo before installing the operator
 - All resources deployed in us-east-1 region
 - Operator works with or without database connection
 - ConfigMaps selected using standard Kubernetes label selectors
@@ -256,10 +256,10 @@ curl http://localhost:8080/metrics
 - Demo uses manual secret sync, production would automate this
 
 ### Design Decisions
-- Manual AWS Secrets Manager sync due to time constraints (production would use External Secrets Operator)
-- Password-based database auth for simplicity (production would use IAM database authentication with IRSA)
-- Only linux/amd64 build to speed up CI (ARM64 can be added later)
-- Operator continues working without database connection for easier testing
+- Manually syncing RDS credentials from AWS Secrets Manager to keep things simple. In prod I'd use External Secrets Operator to automate this
+- Using password-based auth for the database to keep the setup straightforward. IAM auth would be better for prod
+- Building only for linux/amd64 to keep CI builds fast. ARM64 support can come later if needed
+- The operator keeps running even without database access, which made testing way easier
 
 ## License
 
