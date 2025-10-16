@@ -2,6 +2,8 @@
 
 A Kubernetes operator that replicates ConfigMaps across namespaces with PostgreSQL persistence.
 
+> Added External Secrets integration after submission - see [PR #2](https://github.com/sarataha/configmirror-operator/pull/2) for automated secret sync.
+
 ## Features
 
 - Replicates ConfigMaps across namespaces using label selectors
