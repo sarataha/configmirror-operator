@@ -58,9 +58,12 @@ export ECR_URL=$(aws ecr describe-repositories --repository-names configmirror-o
 aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $ECR_URL
 
 # Build and push image
-docker build -t $ECR_URL:sha-$(git rev-parse --short HEAD) .
-docker push $ECR_URL:sha-$(git rev-parse --short HEAD)
+export IMAGE_TAG="ts-$(date -u +%Y%m%d%H%M%S)"
+docker build -t $ECR_URL:$IMAGE_TAG .
+docker push $ECR_URL:$IMAGE_TAG
 ```
+
+**Note**: ECR is immutable not allowing overwriting tags so for testing we could use a timestamp for each build. In prod typically the images used is the one pushed by CI/CD with proper version tags.
 
 ### 2. Configure kubectl
 
@@ -102,7 +105,7 @@ export ECR_URL=$(aws ecr describe-repositories --repository-names configmirror-o
 helm install configmirror-operator ./helm/configmirror-operator \
   --namespace configmirror-system \
   --set image.repository=$ECR_URL \
-  --set image.tag=sha-$(git rev-parse --short HEAD)
+  --set image.tag=$IMAGE_TAG
 
 # Verify deployment
 kubectl get pods -n configmirror-system
