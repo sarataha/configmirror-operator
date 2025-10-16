@@ -27,7 +27,7 @@ ConfigMirror CR (ops namespace)
 
 ## Prerequisites
 
-### Infrastructure Requirements
+### Infra Requirements
 
 This operator requires AWS infrastructure to be deployed first:
 - EKS cluster (Kubernetes 1.34)
@@ -38,17 +38,31 @@ This operator requires AWS infrastructure to be deployed first:
 
 **Deploy infrastructure first using:** https://github.com/sarataha/infra
 
-### Local Development Requirements
+### Requirements
 
 - kubectl 1.34+
 - Helm 3.16+
 - AWS CLI 2.0+
-- Go 1.25.0+ (for development)
-- Kubebuilder 4.9.0+ (for development)
+- Go 1.25.0+
+- Kubebuilder 4.9.0+
 
 ## Installation
 
-### 1. Configure kubectl
+### 1. Build and Push Image
+
+```bash
+# Get ECR repository URL
+export ECR_URL=$(aws ecr describe-repositories --repository-names configmirror-operator --query 'repositories[0].repositoryUri' --output text)
+
+# Login to ECR
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $ECR_URL
+
+# Build and push image
+docker build -t $ECR_URL:sha-$(git rev-parse --short HEAD) .
+docker push $ECR_URL:sha-$(git rev-parse --short HEAD)
+```
+
+### 2. Configure kubectl
 
 ```bash
 # Connect to the EKS cluster created by infra repo
@@ -56,7 +70,7 @@ aws eks update-kubeconfig --name pawapay-eks-dev --region us-east-1
 kubectl get nodes
 ```
 
-### 2. Set Up Secret Synchronization
+### 3. Set Up Secret Synchronization
 
 RDS credentials are stored in AWS Secrets Manager and automatically synced to Kubernetes using External Secrets Operator (deployed via the infra repo).
 
@@ -77,20 +91,17 @@ kubectl describe externalsecret rds-credentials -n configmirror-system
 
 The ExternalSecret will automatically keep the Kubernetes secret in sync with AWS Secrets Manager - no manual updates needed.
 
-### 3. Install with Helm
+### 4. Install with Helm
 
 ```bash
 # Get ECR repository URL
-export ECR_URL=$(aws ecr describe-repositories \
-  --repository-names configmirror-operator \
-  --query 'repositories[0].repositoryUri' \
-  --output text)
+export ECR_URL=$(aws ecr describe-repositories --repository-names configmirror-operator --query 'repositories[0].repositoryUri' --output text)
 
 # Install operator
 helm install configmirror-operator ./helm/configmirror-operator \
   --namespace configmirror-system \
   --set image.repository=$ECR_URL \
-  --set image.tag=latest
+  --set image.tag=sha-$(git rev-parse --short HEAD)
 
 # Verify deployment
 kubectl get pods -n configmirror-system
