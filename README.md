@@ -71,8 +71,8 @@ kubectl apply -f config/samples/cluster-secret-store.yaml
 kubectl apply -f config/samples/external-secret-rds.yaml
 
 # Verify secret was created
-kubectl get secret rds-credentials -n default
-kubectl describe externalsecret rds-credentials -n default
+kubectl get secret rds-credentials -n configmirror-system
+kubectl describe externalsecret rds-credentials -n configmirror-system
 ```
 
 The ExternalSecret will automatically keep the Kubernetes secret in sync with AWS Secrets Manager - no manual updates needed.
