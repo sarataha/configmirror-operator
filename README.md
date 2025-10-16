@@ -54,27 +54,26 @@ aws eks update-kubeconfig --name pawapay-eks-dev --region us-east-1
 kubectl get nodes
 ```
 
-### 2. Create Kubernetes Secret from AWS Secrets Manager
+### 2. Set Up Secret Synchronization
 
-RDS credentials are stored in AWS Secrets Manager. Create a Kubernetes secret from it:
+RDS credentials are stored in AWS Secrets Manager and automatically synced to Kubernetes using External Secrets Operator (deployed via the infra repo).
 
 ```bash
 # Create namespace
-kubectl create namespace configmirror-system
+kubectl create namespace default
 
-# Sync credentials from AWS Secrets Manager to Kubernetes
-aws secretsmanager get-secret-value \
-  --secret-id pawapay-rds-master-password \
-  --region us-east-1 \
-  --query SecretString \
-  --output text | jq -r '. | to_entries | map("--from-literal=\(.key)=\(.value|tostring)") | join(" ")' | \
-  xargs kubectl create secret generic rds-credentials -n configmirror-system
+# Apply ClusterSecretStore (connects to AWS Secrets Manager)
+kubectl apply -f config/samples/cluster-secret-store.yaml
 
-# Verify
-kubectl describe secret rds-credentials -n configmirror-system
+# Apply ExternalSecret (syncs RDS credentials to K8s secret)
+kubectl apply -f config/samples/external-secret-rds.yaml
+
+# Verify secret was created
+kubectl get secret rds-credentials -n default
+kubectl describe externalsecret rds-credentials -n default
 ```
 
-> **Note:** Due to time constraints this uses a manual sync command. In a production environment I would use [External Secrets Operator](https://external-secrets.io/) to automatically sync secrets from AWS Secrets Manager to Kubernetes eliminating manual steps and keeping secrets updated automatically.
+The ExternalSecret will automatically keep the Kubernetes secret in sync with AWS Secrets Manager - no manual updates needed.
 
 ### 3. Install with Helm
 
@@ -248,15 +247,14 @@ curl http://localhost:8080/metrics
 ## Design Decisions & Assumptions
 
 ### Assumptions Made
-- AWS infrastructure (EKS, RDS, ECR) is deployed via `infra` repo before installing the operator
+- AWS infrastructure (EKS, RDS, ECR) and External Secrets Operator are deployed via `infra` repo before installing the operator
 - All resources deployed in us-east-1 region
 - Operator works with or without database connection
 - ConfigMaps selected using standard Kubernetes label selectors
 - Operator requires cluster-wide permissions to watch multiple namespaces
-- Demo uses manual secret sync, production would automate this
 
 ### Design Decisions
-- Manually syncing RDS credentials from AWS Secrets Manager to keep things simple. In prod I'd use External Secrets Operator to automate this
+- Using External Secrets Operator to automatically sync RDS credentials from AWS Secrets Manager - keeps secrets updated without manual intervention
 - Using password-based auth for the database to keep the setup straightforward. IAM auth would be better for prod
 - Building only for linux/amd64 to keep CI builds fast. ARM64 support can come later if needed
 - The operator keeps running even without database access, which made testing way easier
