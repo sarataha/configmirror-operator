@@ -208,17 +208,17 @@ func (r *ConfigMirrorReconciler) deleteReplicatedConfigMap(ctx context.Context, 
 	err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: targetNS}, configMap)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			return nil // Already deleted, no error
+			return nil
 		}
 		return err
 	}
 
-	// Only delete if it has our owner label (safety check)
+	// Only delete if it has the operator's owner label
 	if configMap.Labels != nil && configMap.Labels[ownerLabel] == ownerLabelValue {
 		return r.Delete(ctx, configMap)
 	}
 
-	return nil // Not ours, don't delete
+	return nil
 }
 
 func (r *ConfigMirrorReconciler) cleanupConfigMaps(ctx context.Context, configMirror *mirrorv1alpha1.ConfigMirror) error {
