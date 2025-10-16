@@ -2,6 +2,8 @@
 
 A Kubernetes operator that replicates ConfigMaps across namespaces with PostgreSQL persistence.
 
+> Added External Secrets integration after submission - see [PR #2](https://github.com/sarataha/configmirror-operator/pull/2) for automated secret sync.
+
 ## Features
 
 - Replicates ConfigMaps across namespaces using label selectors
@@ -74,7 +76,7 @@ aws secretsmanager get-secret-value \
 kubectl describe secret rds-credentials -n configmirror-system
 ```
 
-> **Note:** Due to time constraints this uses a manual sync command. In a production environment I would use [External Secrets Operator](https://external-secrets.io/) to automatically sync secrets from AWS Secrets Manager to Kubernetes eliminating manual steps and keeping secrets updated automatically.
+> **Note:** This uses a manual sync command. Added External Secrets Operator integration in [PR #2](https://github.com/sarataha/configmirror-operator/pull/2) to automate this.
 
 ### 3. Install with Helm
 
@@ -256,7 +258,7 @@ curl http://localhost:8080/metrics
 - Demo uses manual secret sync, production would automate this
 
 ### Design Decisions
-- Manually syncing RDS credentials from AWS Secrets Manager to keep things simple. In prod I'd use External Secrets Operator to automate this
+- Manually syncing RDS credentials from AWS Secrets Manager to keep things simple. External Secrets Operator automation added in [PR #2](https://github.com/sarataha/configmirror-operator/pull/2)
 - Using password-based auth for the database to keep the setup straightforward. IAM auth would be better for prod
 - Building only for linux/amd64 to keep CI builds fast. ARM64 support can come later if needed
 - The operator keeps running even without database access, which made testing way easier
