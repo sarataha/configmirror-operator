@@ -60,7 +60,7 @@ RDS credentials are stored in AWS Secrets Manager and automatically synced to Ku
 
 ```bash
 # Create namespace
-kubectl create namespace default
+kubectl create namespace configmirror-system
 
 # Apply ClusterSecretStore (connects to AWS Secrets Manager)
 kubectl apply -f config/samples/cluster-secret-store.yaml
