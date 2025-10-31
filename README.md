@@ -2,8 +2,6 @@
 
 A Kubernetes operator that replicates ConfigMaps across namespaces with PostgreSQL persistence.
 
-> Added External Secrets integration after submission - see [PR #2](https://github.com/sarataha/configmirror-operator/pull/2) for automated secret sync.
-
 ## Features
 
 - Replicates ConfigMaps across namespaces using label selectors
@@ -58,15 +56,18 @@ export ECR_URL=$(aws ecr describe-repositories --repository-names configmirror-o
 aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $ECR_URL
 
 # Build and push image
-docker build -t $ECR_URL:sha-$(git rev-parse --short HEAD) .
-docker push $ECR_URL:sha-$(git rev-parse --short HEAD)
+export IMAGE_TAG="ts-$(date -u +%Y%m%d%H%M%S)"
+docker build -t $ECR_URL:$IMAGE_TAG .
+docker push $ECR_URL:$IMAGE_TAG
 ```
+
+**Note**: ECR is immutable not allowing overwriting tags so for testing we could use a timestamp for each build. In prod typically the images used is the one pushed by CI/CD with proper version tags.
 
 ### 2. Configure kubectl
 
 ```bash
 # Connect to the EKS cluster created by infra repo
-aws eks update-kubeconfig --name pawapay-eks-dev --region us-east-1
+aws eks update-kubeconfig --name configmirror-eks-dev --region us-east-1
 kubectl get nodes
 ```
 
@@ -101,7 +102,7 @@ export ECR_URL=$(aws ecr describe-repositories --repository-names configmirror-o
 helm install configmirror-operator ./helm/configmirror-operator \
   --namespace configmirror-system \
   --set image.repository=$ECR_URL \
-  --set image.tag=sha-$(git rev-parse --short HEAD)
+  --set image.tag=$IMAGE_TAG
 
 # Verify deployment
 kubectl get pods -n configmirror-system
@@ -113,7 +114,7 @@ kubectl logs -n configmirror-system -l app.kubernetes.io/name=configmirror-opera
 ### Create a ConfigMirror Resource
 
 ```yaml
-apiVersion: mirror.pawapay.io/v1alpha1
+apiVersion: mirror.configmirror.io/v1alpha1
 kind: ConfigMirror
 metadata:
   name: app-config-mirror
@@ -170,7 +171,7 @@ The operator automatically handles updates to source ConfigMaps:
 
 The operator uses finalizers for clean resource cleanup:
 
-- A finalizer (`mirror.pawapay.io/finalizer`) is automatically added when ConfigMirror is created
+- A finalizer (`mirror.configmirror.io/finalizer`) is automatically added when ConfigMirror is created
 - When ConfigMirror is deleted, the operator:
   1. Removes all replicated ConfigMaps from target namespaces
   2. Deletes database records (if enabled)

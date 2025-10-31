@@ -26,7 +26,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - mirror.pawapay.io
+  - mirror.configmirror.io
   resources:
   - configmirrors
   verbs:
@@ -38,13 +38,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - mirror.pawapay.io
+  - mirror.configmirror.io
   resources:
   - configmirrors/finalizers
   verbs:
   - update
 - apiGroups:
-  - mirror.pawapay.io
+  - mirror.configmirror.io
   resources:
   - configmirrors/status
   verbs:
