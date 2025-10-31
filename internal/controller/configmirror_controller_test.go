@@ -125,7 +125,7 @@ var _ = Describe("ConfigMirror Controller Integration Tests", func() {
 					return nil
 				}
 				return updated.Finalizers
-			}, timeout, interval).Should(ContainElement("mirror.pawapay.io/finalizer"))
+			}, timeout, interval).Should(ContainElement("mirror.configmirror.io/finalizer"))
 		})
 
 		It("should replicate ConfigMaps matching label selector to target namespaces", func() {
@@ -196,7 +196,7 @@ var _ = Describe("ConfigMirror Controller Integration Tests", func() {
 				Namespace: targetNamespace1,
 			}, replica)).To(Succeed())
 			Expect(replica.Data).To(Equal(sourceConfigMap.Data))
-			Expect(replica.Labels).To(HaveKey("mirror.pawapay.io/owner"))
+			Expect(replica.Labels).To(HaveKey("mirror.configmirror.io/owner"))
 		})
 
 		It("should not replicate ConfigMaps with non-matching labels", func() {

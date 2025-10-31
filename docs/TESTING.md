@@ -22,7 +22,7 @@ kubectl create namespace app-prod
 Create a file `test-configmirror.yaml`:
 
 ```yaml
-apiVersion: mirror.pawapay.io/v1alpha1
+apiVersion: mirror.configmirror.io/v1alpha1
 kind: ConfigMirror
 metadata:
   name: test-mirror

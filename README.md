@@ -2,8 +2,6 @@
 
 A Kubernetes operator that replicates ConfigMaps across namespaces with PostgreSQL persistence.
 
-> Added External Secrets integration after submission - see [PR #2](https://github.com/sarataha/configmirror-operator/pull/2) for automated secret sync.
-
 ## Features
 
 - Replicates ConfigMaps across namespaces using label selectors
@@ -69,7 +67,7 @@ docker push $ECR_URL:$IMAGE_TAG
 
 ```bash
 # Connect to the EKS cluster created by infra repo
-aws eks update-kubeconfig --name pawapay-eks-dev --region us-east-1
+aws eks update-kubeconfig --name configmirror-eks-dev --region us-east-1
 kubectl get nodes
 ```
 
@@ -83,7 +81,7 @@ kubectl create namespace configmirror-system
 
 # Sync credentials from AWS Secrets Manager to Kubernetes
 aws secretsmanager get-secret-value \
-  --secret-id pawapay-rds-master-password \
+  --secret-id configmirror-rds-master-password \
   --region us-east-1 \
   --query SecretString \
   --output text | jq -r '. | to_entries | map("--from-literal=\(.key)=\(.value|tostring)") | join(" ")' | \
@@ -117,7 +115,7 @@ kubectl logs -n configmirror-system -l app.kubernetes.io/name=configmirror-opera
 ### Create a ConfigMirror Resource
 
 ```yaml
-apiVersion: mirror.pawapay.io/v1alpha1
+apiVersion: mirror.configmirror.io/v1alpha1
 kind: ConfigMirror
 metadata:
   name: app-config-mirror
@@ -174,7 +172,7 @@ The operator automatically handles updates to source ConfigMaps:
 
 The operator uses finalizers for clean resource cleanup:
 
-- A finalizer (`mirror.pawapay.io/finalizer`) is automatically added when ConfigMirror is created
+- A finalizer (`mirror.configmirror.io/finalizer`) is automatically added when ConfigMirror is created
 - When ConfigMirror is deleted, the operator:
   1. Removes all replicated ConfigMaps from target namespaces
   2. Deletes database records (if enabled)

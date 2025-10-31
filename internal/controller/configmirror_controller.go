@@ -24,8 +24,8 @@ import (
 )
 
 const (
-	finalizerName = "mirror.pawapay.io/finalizer"
-	ownerLabel    = "mirror.pawapay.io/owner"
+	finalizerName = "mirror.configmirror.io/finalizer"
+	ownerLabel    = "mirror.configmirror.io/owner"
 )
 
 // ConfigMirrorReconciler reconciles a ConfigMirror object
@@ -35,9 +35,9 @@ type ConfigMirrorReconciler struct {
 	DBClient *database.Client
 }
 
-// +kubebuilder:rbac:groups=mirror.pawapay.io,resources=configmirrors,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=mirror.pawapay.io,resources=configmirrors/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=mirror.pawapay.io,resources=configmirrors/finalizers,verbs=update
+// +kubebuilder:rbac:groups=mirror.configmirror.io,resources=configmirrors,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=mirror.configmirror.io,resources=configmirrors/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=mirror.configmirror.io,resources=configmirrors/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch

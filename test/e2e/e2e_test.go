@@ -295,7 +295,7 @@ data:
 
 			By("creating a ConfigMirror resource")
 			configMirrorYAML := `
-apiVersion: mirror.pawapay.io/v1alpha1
+apiVersion: mirror.configmirror.io/v1alpha1
 kind: ConfigMirror
 metadata:
   name: test-mirror
