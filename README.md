@@ -71,27 +71,26 @@ aws eks update-kubeconfig --name configmirror-eks-dev --region us-east-1
 kubectl get nodes
 ```
 
-### 3. Create Kubernetes Secret from AWS Secrets Manager
+### 3. Set Up Secret Synchronization
 
-RDS credentials are stored in AWS Secrets Manager. Create a Kubernetes secret from it:
+RDS credentials are stored in AWS Secrets Manager and automatically synced to Kubernetes using External Secrets Operator (deployed via the infra repo).
 
 ```bash
 # Create namespace
 kubectl create namespace configmirror-system
 
-# Sync credentials from AWS Secrets Manager to Kubernetes
-aws secretsmanager get-secret-value \
-  --secret-id configmirror-rds-master-password \
-  --region us-east-1 \
-  --query SecretString \
-  --output text | jq -r '. | to_entries | map("--from-literal=\(.key)=\(.value|tostring)") | join(" ")' | \
-  xargs kubectl create secret generic rds-credentials -n configmirror-system
+# Apply ClusterSecretStore (connects to AWS Secrets Manager)
+kubectl apply -f config/samples/cluster-secret-store.yaml
 
-# Verify
-kubectl describe secret rds-credentials -n configmirror-system
+# Apply ExternalSecret (syncs RDS credentials to K8s secret)
+kubectl apply -f config/samples/external-secret-rds.yaml
+
+# Verify secret was created
+kubectl get secret rds-credentials -n configmirror-system
+kubectl describe externalsecret rds-credentials -n configmirror-system
 ```
 
-> **Note:** This uses a manual sync command. Added External Secrets Operator integration in [PR #2](https://github.com/sarataha/configmirror-operator/pull/2) to automate this.
+The ExternalSecret will automatically keep the Kubernetes secret in sync with AWS Secrets Manager - no manual updates needed.
 
 ### 4. Install with Helm
 
@@ -262,15 +261,14 @@ curl http://localhost:8080/metrics
 ## Design Decisions & Assumptions
 
 ### Assumptions Made
-- AWS infrastructure (EKS, RDS, ECR) is deployed via `infra` repo before installing the operator
+- AWS infrastructure (EKS, RDS, ECR) and External Secrets Operator are deployed via `infra` repo before installing the operator
 - All resources deployed in us-east-1 region
 - Operator works with or without database connection
 - ConfigMaps selected using standard Kubernetes label selectors
 - Operator requires cluster-wide permissions to watch multiple namespaces
-- Demo uses manual secret sync, production would automate this
 
 ### Design Decisions
-- Manually syncing RDS credentials from AWS Secrets Manager to keep things simple. External Secrets Operator automation added in [PR #2](https://github.com/sarataha/configmirror-operator/pull/2)
+- Using External Secrets Operator to automatically sync RDS credentials from AWS Secrets Manager - keeps secrets updated without manual intervention
 - Using password-based auth for the database to keep the setup straightforward. IAM auth would be better for prod
 - Building only for linux/amd64 to keep CI builds fast. ARM64 support can come later if needed
 - The operator keeps running even without database access, which made testing way easier
