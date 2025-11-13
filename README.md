@@ -2,6 +2,8 @@
 
 A Kubernetes operator that replicates ConfigMaps across namespaces with PostgreSQL persistence.
 
+<!-- TEST: CI path filtering verification -->
+
 ## Features
 
 - Replicates ConfigMaps across namespaces using label selectors
